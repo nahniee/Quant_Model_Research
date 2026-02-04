@@ -38,7 +38,7 @@ LPPL captures speculative bubble behavior and predicts **critical crash time ($t
 
 ---
 
-### 3. `CLAM Model (CNN + LSTM + Attention + MLP)`
+### 3. `CLAM Model (CNN + LSTM + Attention)`
 
 Trains on 100+ stocks using high-dimensional time-series features (`Open`, `High`, `Low`, `Close`, `Volume`):
 
