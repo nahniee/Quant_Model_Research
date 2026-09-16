@@ -1,0 +1,6 @@
+__pycache__/
+*.log
+*.keras
+*.h5
+*.pkl
+.ipynb_checkpoints/
