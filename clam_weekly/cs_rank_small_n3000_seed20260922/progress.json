@@ -1,0 +1,11 @@
+{
+  "epoch": 9,
+  "elapsed_seconds": 253.84921288490295,
+  "metrics": {
+    "directional_accuracy": 0.5135294198989868,
+    "loss": 0.4607757329940796,
+    "val_directional_accuracy": 0.5048372149467468,
+    "val_loss": 0.46419039368629456,
+    "learning_rate": 2.700000004551839e-05
+  }
+}

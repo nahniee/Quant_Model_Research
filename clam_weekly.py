@@ -13,7 +13,8 @@ What changed vs clam_model.py (quarterly) and why
   --  features are split/dividend adjusted; scaled with a StandardScaler fitted
       on the training window and clipped at +-5 sigma.
 Architecture is otherwise the original CLAM: causal Conv1D x3 -> LSTM x3 ->
-Attention -> Dense head. Nothing after TRAIN_END is used for any choice.
+Attention -> Dense head. Targets are cut at TRAIN_END, but the top-N universe uses the later snapshot
+and therefore retains future-membership / survivorship bias.
 """
 import json
 from pathlib import Path

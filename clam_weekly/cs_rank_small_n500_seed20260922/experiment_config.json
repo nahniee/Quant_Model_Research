@@ -1,0 +1,41 @@
+{
+  "seq_length": 120,
+  "horizon": 5,
+  "stride": 5,
+  "train_start": "2013-01-01",
+  "train_end": "2021-12-31",
+  "val_years": 2,
+  "n_tickers": 500,
+  "cnn_layers": [
+    {
+      "filters": 64,
+      "kernel_size": 5
+    },
+    {
+      "filters": 64,
+      "kernel_size": 5
+    }
+  ],
+  "lstm_layers": [
+    {
+      "units": 128
+    },
+    {
+      "units": 128
+    }
+  ],
+  "dropout": 0.3,
+  "batch_size": 256,
+  "epochs": 40,
+  "clip_sigma": 5.0,
+  "target": "cs_rank",
+  "bars": "daily",
+  "db_path": "/home/donghwee/Nahyun/Signal_Validation/data/signal_validation.duckdb",
+  "artifacts": {
+    "model": "clam_weekly_model.keras",
+    "scaler": "clam_weekly_scaler.pkl",
+    "meta": "clam_weekly_meta.json"
+  },
+  "seed": 20260922,
+  "purge_validation_boundary": true
+}

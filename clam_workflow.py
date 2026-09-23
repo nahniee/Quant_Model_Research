@@ -62,7 +62,7 @@ def load_prediction_tools(config):
     """Loads the correct model and scaler based on the configuration."""
     try:
         custom_objects = {'Attention': Attention, 'directional_accuracy': directional_accuracy}
-        model = load_model(config['model_path'], custom_objects=custom_objects)
+        model = load_model(config['model_path'], custom_objects=custom_objects, compile=False)
         scaler = joblib.load(config['scaler_path'])
         print(f"Successfully loaded model ({config['model_path']}) and scaler.")
         return model, scaler

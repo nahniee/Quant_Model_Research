@@ -89,14 +89,47 @@ class Attention(Layer):
 
 # Measures accuracy of predicted price movement direction
 def directional_accuracy(y_true, y_pred):
-    # Compare the sign of predicted vs actual Close price changes
+    # Legacy artifact compatibility only: signs of scaled values are not return directions.
     true_direction = K.sign(y_true[:, :, 3]) # Close is the 4th feature (index 3)
     pred_direction = K.sign(y_pred[:, :, 3])
     correct_direction = K.equal(true_direction, pred_direction)
     return K.mean(tf.cast(correct_direction, tf.float32))
 
+@tf.keras.utils.register_keras_serializable(package="clam")
+class ReturnDirectionalAccuracy(tf.keras.metrics.Metric):
+    """Direction in original return units, using the training scaler's image of zero."""
+    def __init__(self, scaled_zero, name="return_directional_accuracy", **kwargs):
+        super().__init__(name=name, **kwargs)
+        self.scaled_zero = float(scaled_zero)
+        self.correct = self.add_weight(name="correct", initializer="zeros")
+        self.count = self.add_weight(name="count", initializer="zeros")
+
+    def update_state(self, y_true, y_pred, sample_weight=None):
+        correct = tf.cast(tf.equal(tf.sign(y_true[:, :, 3] - self.scaled_zero),
+                                   tf.sign(y_pred[:, :, 3] - self.scaled_zero)), self.dtype)
+        weights = tf.ones_like(correct)
+        if sample_weight is not None:
+            sw = tf.cast(sample_weight, self.dtype)
+            if sw.shape.rank == 1:
+                sw = sw[:, None]
+            weights *= sw
+        self.correct.assign_add(tf.reduce_sum(correct * weights))
+        self.count.assign_add(tf.reduce_sum(weights))
+
+    def result(self):
+        return tf.math.divide_no_nan(self.correct, self.count)
+
+    def reset_state(self):
+        self.correct.assign(0); self.count.assign(0)
+
+    def get_config(self):
+        return {**super().get_config(), "scaled_zero": self.scaled_zero}
+
+
 # Model creation function
-def create_model(config):
+def create_model(config, scaler=None, legacy_metric=False):
+    if not legacy_metric and scaler is None:
+        raise ValueError("A fitted scaler is required for return-direction accuracy")
     seq_len = config['seq_length']
     forecast_horizon = config['forecast_horizon']
     
@@ -130,7 +163,8 @@ def create_model(config):
     # The Huber loss function and the AdamW optimizer are the best combination for stock data with high volatility and many unpredictable outliers
     model.compile(optimizer=tf.keras.optimizers.AdamW(learning_rate=1e-4), 
                   loss='huber', 
-                  metrics=[directional_accuracy])
+                  metrics=[directional_accuracy] if legacy_metric else
+                  [ReturnDirectionalAccuracy(scaler.min_[3])])
     return model
 
 # Sliding window sequence generation
@@ -143,7 +177,7 @@ def create_sequences(data, seq_len, forecast_len):
 
 
 # Main training loop (Modify)
-def main(model_type, training_end_date=None):
+def main(model_type, training_end_date=None, legacy_metric=False):
     print(f"Starting training for [{model_type.upper()}] model")
     
     # Load the correct configuration
@@ -324,12 +358,12 @@ def main(model_type, training_end_date=None):
     X_val, y_val = create_sequences(val_scaled, seq_length, forecast_horizon)
 
     # Build and train model
-    model = create_model(config)
+    model = create_model(config, scaler=scaler, legacy_metric=legacy_metric)
     model.summary()
     
     callbacks = [
         # Save the best model based on directional accuracy
-        EarlyStopping(monitor='val_directional_accuracy', mode='max', patience=15, restore_best_weights=True, verbose=1),
+        EarlyStopping(monitor='val_directional_accuracy' if legacy_metric else 'val_return_directional_accuracy', mode='max', patience=15, restore_best_weights=True, verbose=1),
         ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=7, min_lr=1e-6)
     ]
     
@@ -340,6 +374,17 @@ def main(model_type, training_end_date=None):
     scaler_filename = f"{model_type}_scaler.pkl"
     model.save(model_filename)
     joblib.dump(scaler, scaler_filename)
+    import json, hashlib
+    from pathlib import Path
+    metadata = {"requested_training_end": training_end_date,
+                "data_first_date": str(full_processed_df.index.min()),
+                "data_last_date": str(full_processed_df.index.max()),
+                "train_last_date": str(train_df.index.max()),
+                "validation_first_date": str(val_df.index.min()),
+                "legacy_metric": legacy_metric,
+                "sequence_construction": "legacy cross-ticker date-sorted rows; known defect",
+                "model_sha256": hashlib.sha256(Path(model_filename).read_bytes()).hexdigest()}
+    Path(f"{model_type}_metadata.json").write_text(json.dumps(metadata, indent=2))
     print(f"\nTraining complete. {model_filename} and {scaler_filename} have been saved.")
 
 if __name__ == '__main__':
