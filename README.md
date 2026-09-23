@@ -1,66 +1,48 @@
 # Quant Model Research
 
-This project is a research module that provides **modular implementations of quantitative models** used in a long-term trading bot.
-It supports the bot’s decision-making by simulating market dynamics, forecasting stock performance using deep learning models, and detecting potential bubble risks through a multi-model analytical pipeline.
+Research notebooks for the models behind my long-term trading bot. Each one is a self-contained implementation that the bot in [Long_Term_Trading](https://github.com/nahniee/Long_Term_Trading) calls into: a GBM simulation for ranking stocks, an LPPL model for spotting bubbles, and a deep learning forecaster (CLAM).
 
----
+I later reviewed the GBM and CLAM models in [Signal_Validation](https://github.com/nahniee/Signal_Validation), which led to the weekly CLAM rebuild in `clam_weekly.py`.
 
-## Repository Structure
+## Files
 
-| File | Model | Description |
-|------|-------|-------------|
-| `gbm_simulation_for_stocks.ipynb` | **GBM Simulation** | Generates probabilistic future stock paths and ranks based on expected return |
-| `lppl_simulation.ipynb` | **LPPL Model** | Detects bubble behavior and crash timing using log-periodic power law (deterministic + Bayesian) |
-| `clam_simulation.ipynb` | **CLAM Model** | Deep learning model (CNN + LSTM + Attention) for multi-ticker price forecasting |
+| File | Model | What it does |
+|------|-------|--------------|
+| `gbm_simulation_for_stocks.ipynb` | GBM | Simulates future price paths and ranks stocks on them |
+| `lppl_simulation.ipynb` | LPPL | Looks for bubble behaviour and estimates crash timing, with both a least-squares and a Bayesian fit |
+| `clam_simulation.ipynb` | CLAM | CNN + LSTM + attention model that forecasts prices for many tickers |
+| `clam_weekly.py`, `clam_weekly.ipynb` | Weekly CLAM | The rebuilt 5-day version, trained one ticker at a time |
 
----
+## Models
 
-## Model Overview
+### Geometric Brownian Motion (GBM)
 
-### 1. `Geometric Brownian Motion (GBM)`
+Estimates each stock's drift ($\mu$) and volatility ($\sigma$) from its history and simulates a price path forward. The deployed ranking function draws a single path per stock and scores it by the path's average; the review found that one path adds a lot of noise to the ranking.
 
-Simulates multiple forward-looking price paths for each stock using historical drift ($\mu$) and volatility ($\sigma$):
+- Modes: `quarterly` (63 trading days) and `hourly` (the next 7 trading hours)
+- Output: a ranked list of stocks, with plots of the simulated paths
 
-- **Use Cases**: Stock ranking by average simulated return
-- **Modes**: 
-  - `quarterly` (65 days)
-  - `hourly` (next 7 trading hours)
-- **Output**: Ranked list of stocks with visualized simulated paths
+### Log-Periodic Power Law (LPPL)
 
----
+Fits the log-periodic power law to an index to look for speculative bubbles and estimate the critical crash time $t_c$.
 
-### 2. `Log-Periodic Power Law (LPPL)`
+- The classic fit uses least squares to find the power-law trend and the log-periodic oscillation.
+- The Bayesian version runs MCMC and gives a posterior for $t_c$, shown as a KDE with a 94% HDI.
 
-LPPL captures speculative bubble behavior and predicts **critical crash time ($t_c$)**.
+### CLAM (CNN + LSTM + attention)
 
-- **Classic LPPL**: Fitted using deterministic methods to detect power-law & log-periodic oscillations  
-- **Bayesian MCMC LPPL**: Gives posterior distribution of $t_c$ with HDI (e.g. 94%) + KDE plot  
+Trained on 94 large-cap stocks using daily Open, High, Low, Close and Volume. The network has a custom attention layer and tracks directional accuracy during training.
 
----
+- Modes: `quarterly` (65 days ahead) and `hourly` (7 hours ahead)
+- Output: forecast prices, expected return per ticker, a top-10 ranking, and an accuracy check when the actual prices are available
 
-### 3. `CLAM Model (CNN + LSTM + Attention)`
+## How the bot uses them
 
-Trains on 100+ stocks using high-dimensional time-series features (`Open`, `High`, `Low`, `Close`, `Volume`):
+The models feed a larger trading pipeline that:
 
-- **Features**: Fully custom deep learning model with attention and directional accuracy
-- **Modes**: `quarterly` (65 days), `hourly` (7 hours)
-- **Outputs**:
-  - Predicted future closing prices
-  - Expected return per ticker
-  - Top 10 stock ranking
-  - Accuracy evaluation if actual future prices available
+- combines their scores with weights,
+- adds news sentiment scored by an LLM,
+- uses LPPL to judge the market regime, and
+- picks a portfolio on a regular schedule.
 
----
-
-## Integration
-
-All models here are **integrated into a larger Long-Term Trading Bot** pipeline which:
-
-- Combines model outputs via weighted scoring
-- Uses LLM for sentiment analysis
-- Predicts market regime with LPPL
-- Makes periodic portfolio selections
-
-#### Refer to the main [Long_Term_Trading](https://github.com/nahniee/Long_Term_Trading) repository for full trading logic & pipeline.
-
----
+The full trading logic is in [Long_Term_Trading](https://github.com/nahniee/Long_Term_Trading).

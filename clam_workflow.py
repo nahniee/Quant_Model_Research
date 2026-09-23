@@ -59,7 +59,7 @@ def directional_accuracy(y_true, y_pred):
     return K.mean(tf.cast(correct_direction, tf.float32))
 
 def load_prediction_tools(config):
-    """Loads the correct model and scaler based on the configuration."""
+    """Loads the model and scaler named in the configuration."""
     try:
         custom_objects = {'Attention': Attention, 'directional_accuracy': directional_accuracy}
         model = load_model(config['model_path'], custom_objects=custom_objects, compile=False)
@@ -72,7 +72,7 @@ def load_prediction_tools(config):
 
 # (Modify)
 def predict_single_ticker(ticker, model, scaler, config, prediction_date=None):
-    """Dynamically fetches data and predicts for a single ticker."""
+    """Downloads recent data for one ticker and runs the forecast."""
     try:
         seq_length = config['seq_length']
         interval = config['interval']
@@ -173,7 +173,7 @@ def predict_single_ticker(ticker, model, scaler, config, prediction_date=None):
 
 # (Modify)
 def plot_prediction(result, config):
-    """Dynamically plots results for either daily or hourly predictions."""
+    """Plots the forecast for either the daily or the hourly model."""
     historical_df = result['historical_data']
 
     # Create date index for forecast horizon

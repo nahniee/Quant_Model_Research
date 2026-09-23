@@ -89,7 +89,7 @@ class Attention(Layer):
 
 # Measures accuracy of predicted price movement direction
 def directional_accuracy(y_true, y_pred):
-    # Legacy artifact compatibility only: signs of scaled values are not return directions.
+    # Kept so old model files still load. The sign of a scaled value isn't the return's direction.
     true_direction = K.sign(y_true[:, :, 3]) # Close is the 4th feature (index 3)
     pred_direction = K.sign(y_pred[:, :, 3])
     correct_direction = K.equal(true_direction, pred_direction)
@@ -160,7 +160,7 @@ def create_model(config, scaler=None, legacy_metric=False):
     model = Model(encoder_inputs, outputs)
 
     # Compile with custom metric
-    # The Huber loss function and the AdamW optimizer are the best combination for stock data with high volatility and many unpredictable outliers
+    # Huber loss and AdamW hold up well on volatile stock data with frequent outliers
     model.compile(optimizer=tf.keras.optimizers.AdamW(learning_rate=1e-4), 
                   loss='huber', 
                   metrics=[directional_accuracy] if legacy_metric else
@@ -185,7 +185,7 @@ def main(model_type, training_end_date=None, legacy_metric=False):
     seq_length = config['seq_length']
     forecast_horizon = config['forecast_horizon']
     
-    # Training tickers (multi-sector, 100+ tickers)
+    # Training tickers (94 stocks across several sectors)
     TRAINING_TICKERS = [
         # Technology
         'AAPL',  # Apple

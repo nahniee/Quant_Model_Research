@@ -1,20 +1,23 @@
-"""CLAM weekly, v2 - redeveloped after the Signal_Validation review.
+"""Weekly CLAM, rebuilt after the Signal_Validation review.
 
-What changed vs clam_model.py (quarterly) and why
-  F3  sequences are built PER TICKER, so a training window is 120 days of one
-      stock - the same object the model sees at inference.
-  F4  training is cut at TRAIN_END so an honest out-of-time period exists.
-  --  horizon 65 -> 5 trading days (weekly rebalance); input 252 -> 120 days.
-  --  target is one number, the next-5-day log return of adjusted close, instead
-      of a 65 x 5 sequence: the ranking only ever used one column of that output.
-  --  training universe: top-N by market cap from the validation database
-      (default 500) instead of 94 hand-picked large caps, to match the
-      deployment universe. Prices come from the DuckDB file, not yfinance.
-  --  features are split/dividend adjusted; scaled with a StandardScaler fitted
-      on the training window and clipped at +-5 sigma.
-Architecture is otherwise the original CLAM: causal Conv1D x3 -> LSTM x3 ->
-Attention -> Dense head. Targets are cut at TRAIN_END, but the top-N universe uses the later snapshot
-and therefore retains future-membership / survivorship bias.
+Changes from the quarterly clam_model.py:
+
+Training windows are built one ticker at a time, so each window is 120 days of a single
+stock, which is what the model sees when it makes a prediction (finding F3). Training data
+stops at TRAIN_END, which leaves a real out-of-time period to test on (finding F4).
+
+The horizon is 5 trading days instead of 65, and the input is 120 days instead of 252.
+The target is a single number, the next 5-day log return of the adjusted close. The old
+65 x 5 output was only ever used for one column.
+
+Training uses the top-N stocks by market cap from the validation database (500 by
+default) instead of 94 hand-picked large caps, so it matches the stocks the model is
+applied to. Prices come from the DuckDB file. Features are adjusted for splits and
+dividends, standardised on the training window and clipped at 5 standard deviations.
+
+The architecture is otherwise the original: three causal Conv1D layers, three LSTM layers,
+attention and a dense head. One caveat: the top-N list comes from the later snapshot, so
+it still carries survivorship bias even though targets stop at TRAIN_END.
 """
 import json
 from pathlib import Path
@@ -34,7 +37,7 @@ CONFIG = {
     "horizon": 5,
     "stride": 5,                       # one training window per week per ticker
     "train_start": "2013-01-01",
-    "train_end": "2021-12-31",         # F4: honest out-of-time after this
+    "train_end": "2021-12-31",         # F4: data after this date is kept for out-of-time testing
     "val_years": 2,
     "n_tickers": 500,
     "cnn_layers": [{"filters": 128, "kernel_size": 5}] * 3,
@@ -87,7 +90,6 @@ def create_model(config: dict = CONFIG) -> Model:
     return m
 
 
-# ----------------------------------------------------------------------------- data
 def load_prices(config: dict = CONFIG) -> pd.DataFrame:
     """Long frame (date, ticker, open..volume) for the top-N universe, adjusted for splits/dividends."""
     import duckdb
@@ -169,7 +171,6 @@ def build_dataset(config: dict = CONFIG):
     return Xtr, ytr / y_scale, Xva, yva / y_scale, scaler, {"y_scale": y_scale, "n_tickers": len(feats), "split": str(split.date())}
 
 
-# ----------------------------------------------------------------------------- train
 def artifact_dir(config: dict = CONFIG, root: Path = HERE) -> Path:
     tag = config["target"] + ("_wbars" if config["bars"] == "weekly" else "") + ("_small" if config["lstm_layers"][0]["units"] < 256 else "")
     return root / "clam_weekly" / tag
